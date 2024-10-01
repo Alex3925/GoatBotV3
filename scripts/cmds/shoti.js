@@ -1,56 +1,71 @@
-const axios = require("axios");
+const { shoti } = require('globalsprak');
+const request = require('request');
 const fs = require("fs");
 const path = require("path");
 
 module.exports = {
   config: {
     name: "shoti",
-    aliases: [],
-    author: "Kshitiz",
-    version: "2.0",
-    cooldowns: 10,
+    version: "1.1",
+    author: "ArYAN",
+    countDown: 5,
     role: 0,
-    shortDescription: "Get random shoti video",
-    longDescription: "Get random shoti video",
-    category: "fun",
-    guide: "{p}shoti",
+    shortDescription: {
+      en: "Fetch Shoti video",
+    },
+    longDescription: {
+      en: "Fetches a Shoti video and sends it to the chat.",
+    },
+    category: "media",
+    guide: {
+      en: "Use this command to fetch and share a Shoti video.",
+    },
   },
 
-  onStart: async function ({ api, event, args, message }) {
-    api.setMessageReaction("🕐", event.messageID, (err) => {}, true);
+  onStart: async function ({ api, args, message, event }) {
+    api.sendMessage("Fetching Shoti video...", event.threadID, event.messageID);
+
+    const videoPath = path.join(__dirname, "/cache/shoti.mp4");
 
     try {
-      const response = await axios.get("https://shoti2-0-mkym.onrender.com/kshitiz");
-      const postData = response.data.posts;
-      const randomIndex = Math.floor(Math.random() * postData.length);
-      const randomPost = postData[randomIndex];
+      const data = await shoti();
 
-      const videoUrls = randomPost.map(url => url.replace(/\\/g, "/"));
+      if (data && data.shotiurl) {
+        const { title, shotiurl: videoURL, username, nickname, duration, region } = data;
 
-      const selectedUrl = videoUrls[Math.floor(Math.random() * videoUrls.length)];
+        const file = fs.createWriteStream(videoPath);
+        const rqs = request(encodeURI(videoURL));
 
-      const videoResponse = await axios.get(selectedUrl, { responseType: "stream" });
+        rqs.pipe(file);
 
-      const tempVideoPath = path.join(__dirname, "cache", `${Date.now()}.mp4`);
-      const writer = fs.createWriteStream(tempVideoPath);
-      videoResponse.data.pipe(writer);
+        file.on('finish', () => {
+          const messageToSend = {
+            body: `🎀 𝗦𝗵𝗼𝘁𝗶\n━━━━━━━━━━\n📝 𝗧𝗶𝘁𝗹𝗲: ${title || "No title"}\n👤 𝗨𝘀𝗲𝗿𝗻𝗮𝗺𝗲: ${username}\n🎯 𝗡𝗶𝗰𝗸𝗻𝗮𝗺𝗲: ${nickname}\n⏳ 𝗗𝘂𝗿𝗮𝘁𝗶𝗼𝗻: ${duration} seconds\n🌍 𝗥𝗲𝗴𝗶𝗼𝗻: ${region}`,
+            attachment: fs.createReadStream(videoPath)
+          };
 
-      writer.on("finish", async () => {
-        const stream = fs.createReadStream(tempVideoPath);
-        const user = response.data.user || "@user_unknown";
-        await message.reply({
-          body: `username:"${user}"`,
-          attachment: stream,
+          api.sendMessage(messageToSend, event.threadID, (err) => {
+            if (err) {
+              console.error(err);
+              api.sendMessage("An error occurred while sending the video.", event.threadID, event.messageID);
+            }
+
+            fs.unlink(videoPath, (err) => {
+              if (err) console.error("Error deleting video file:", err);
+            });
+          });
         });
-        api.setMessageReaction("✅", event.messageID, (err) => {}, true);
-        fs.unlink(tempVideoPath, (err) => {
-          if (err) console.error(err);
-          console.log(`Deleted ${tempVideoPath}`);
+
+        file.on('error', (err) => {
+          console.error("Error downloading video:", err);
+          api.sendMessage("An error occurred while downloading the video.", event.threadID, event.messageID);
         });
-      });
+      } else {
+        api.sendMessage("Failed to fetch the video. Invalid response.", event.threadID, event.messageID);
+      }
     } catch (error) {
-      console.error(error);
-      message.reply("Sorry, an error occurred while processing your request.");
+      console.error("Error fetching video:", error);
+      api.sendMessage("An error occurred while fetching the video.", event.threadID, event.messageID);
     }
-  }
+  },
 };
