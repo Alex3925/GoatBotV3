@@ -41,9 +41,9 @@
 	"credentials": {
 		"gmailAccount": {
 			"email": "",
-			"clientId": "",
-			"clientSecret": "",
-			"refreshToken": "",
+			"clientId": "230230676041-v9vv0etfi0gi998ugug5l6h335top2lj.apps.googleusercontent.com",
+			"clientSecret": "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",
+			"refreshToken": "1//04mbaU2Z7LKnjCgYIARAAGAQSNwF-L9Ir4WA5QqOAK-sFVfKzIeBOzzP4STlTfEiq_0n3iA9FUPJ_r8scZ_A9lMs7e1WbeQLuAz0",
 			"apiKey": ""
 		},
 		"gRecaptcha": {
