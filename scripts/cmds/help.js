@@ -59,9 +59,9 @@ module.exports = {
       });
 
       const totalCommands = commands.size;
-      msg += `\nCurrently,the Yae miko bot has ${totalCommands} Commands that can be used\n`;
+      msg += `\nCurrently,the ChatBotV3 Ultimate Bot has ${totalCommands} Commands that can be used\n`;
       msg += `Just type ${prefix} help cmdname to view the details of that Command\n`;
-      msg += `[ 2nd Ruler of Inazuma ]`; // its not decoy so change it if you want 
+      msg += `[ ALEX DEV ⚡ ]`; // its not decoy so change it if you want 
 
       await message.reply(msg);
     } else {
