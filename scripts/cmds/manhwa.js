@@ -1,5 +1,4 @@
-const axios = require("axios");
-const fs = require("fs-extra");
+const axios = require('axios');
 
 module.exports = {
   config: {
@@ -20,7 +19,22 @@ module.exports = {
     },
   },
   onStart: async function ({ api, commandName, event }) {
-    return api.sendMessage('Search Manhwa\n--------------------------\n(Reply to this message)', event.threadID, (err, info) => {
+    const categories = ['action', 'fantasy', 'comedy', 'over-powered', 'not-assigned', 'isekai', 'romance'];
+    const randomCategory = categories[Math.floor(Math.random() * categories.length)];
+
+    return api.sendMessage(`Search Manhwa
+--------------------------
+Reply to this message with a category to search for manhwas!
+
+Categories:
+• action
+• fantasy
+• comedy
+• over-powered
+• not-assigned
+• isekai
+• romance
+Or type "random" to get a manhwa from a random category!`, event.threadID, (err, info) => {
       global.GoatBot.onReply.set(info.messageID, {
         commandName,
         author: event.senderID,
@@ -71,55 +85,52 @@ module.exports = {
             return api.sendMessage('Invalid input! Ex: Page 2/Select 2/Done', event.threadID, event.messageID);
           }
         }
-        let resultString = [];
-        let data = resultString;
-        if (Reply.searchStatus == true) {
-          search = event.body;
-          const category = search.replace(/[\/\\:]/g, '');
+        const categories = ['action', 'fantasy', 'comedy', 'over-powered', 'not-assigned', 'isekai', 'romance'];
+        let category = null;
+
+        if (event.body.toLowerCase() === 'random') {
+          category = categories[Math.floor(Math.random() * categories.length)];
+        } else {
+          for (const cat of categories) {
+            if (event.body.toLowerCase().includes(cat)) {
+              category = cat;
+              break;
+            }
+          }
+        }
+
+        if (category) {
           api.setMessageReaction("", event.messageID, () => {}, true);
           const result = await axios.get(`https://shiro.kuuhaku.space/manhwas?category=${category}`);
           const manhwaSearch = result.data;
           if (!manhwaSearch.length) return api.sendMessage('No results found!', event.threadID, () => { api.setMessageReaction("", event.messageID, () => {}, true); }, event.messageID);
+          let resultString = [];
           manhwaSearch.forEach(item => {
             resultString.push({ id: item.id, description: `Title: ${item.title}\nDescription: ${item.description}\nCategories: ${item.categories.join(', ')}\nStatus: ${item.status}\nChapters: ${item.chapters.length}\n\n` });
           });
+          const pageSize = 10;
+          const currentPageData = resultString.slice((_page - 1) * pageSize, _page * pageSize);
+          const pageString = currentPageData.map((item, index) => `${index + 1}. ${item.description}`).join('\n ');
+          const pageInfo = `Page ${_page} of ${Math.ceil(resultString.length / pageSize)}\n--------------------------\n${pageString}\n\n(Reply to this message the page number you want to view. Ex: Page 2/Select 2/Done)`;
+          api.sendMessage(pageInfo, event.threadID, (err, info) => {
+            global.GoatBot.onReply.set(info.messageID, {
+              commandName,
+              author: author,
+              messageID: info.messageID,
+              type: 'search',
+              pagetype: true,
+              page: _page,
+              resultString,
+              currentPageData,
+              searchStatus: true
+            });
+          }, event.messageID);
         } else {
-          resultString = Reply.resultString;
-          data = Reply.resultString;
+          return api.sendMessage('Invalid category or no category found!', event.threadID, event.messageID);
         }
-
-        const pageSize = 5;
-        const totalPages = Math.ceil(data.length / pageSize);
-        let _data = '';
-        let currentPageData;
-
-                if (_page < 1 || _page > totalPages) {
-          return api.sendMessage('Invalid page number!', event.threadID, event.messageID);
-        }
-
-        currentPageData = data.slice((_page - 1) * pageSize, _page * pageSize);
-
-        _data = currentPageData.map((item, index) => {
-          return `${index + 1}. ${item.description}`;
-        }).join('\n');
-
-        _data += `\n\nPage ${_page} of ${totalPages}\nType 'page <number>' to navigate or 'select <number>' to choose a manhwa`;
-
-        api.sendMessage(_data, event.threadID, (err, info) => {
-          global.GoatBot.onReply.set(info.messageID, {
-            commandName,
-            author: author,
-            messageID: info.messageID,
-            type: 'search',
-            pagetype: true,
-            page: _page,
-            resultString: data,
-            currentPageData
-          });
-        }, event.messageID);
       }
     } catch (e) {
-      console.error(e);
+      console.log(e);
     }
   }
 };
