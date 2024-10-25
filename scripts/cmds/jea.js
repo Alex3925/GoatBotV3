@@ -4,7 +4,7 @@ module.exports = {
   config: {
     name: "jea",
     version: 1.0,
-    author: "OtinXSandip",
+    author: "Alex",
     longDescription: "AI",
     category: "ai",
     guide: {
