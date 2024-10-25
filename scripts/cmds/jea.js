@@ -16,7 +16,7 @@ module.exports = {
     try {
       const prompt = event.body.trim();
       if (!prompt) {
-        await message.reply("Hey I'm your jowa 🥰, ask me a question 😉");
+        await message.reply("Hey I'm your jowa 🥰, chat me 😉😝");
         return;
       }
 
