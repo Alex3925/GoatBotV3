@@ -27,6 +27,7 @@ const nodemailer = require("nodemailer");
 const { execSync } = require('child_process');
 const log = require('./logger/log.js');
 const path = require("path");
+const chokidar = require('chokidar'); // Added chokidar for file watching
 
 process.env.BLUEBIRD_W_FORGOTTEN_RETURN = 0; // Disable warning: "Warning: a promise was created in a handler but was not returned from it"
 
@@ -151,70 +152,54 @@ global.temp = {
 };
 
 // watch dirConfigCommands file and dirConfig
-const watchAndReloadConfig = (dir, type, prop, logName) => {
-	let lastModified = fs.statSync(dir).mtimeMs;
-	let isFirstModified = true;
+const watcher = chokidar.watch([dirConfigCommands, dirConfig], {
+	persistent: true,
+	usePolling: false,
+	ignoreInitial: true,
+	awaitWriteFinish: {
+		stabilityThreshold: 2000,
+		pollInterval: 100
+	}
+});
 
-	fs.watch(dir, (eventType) => {
-		if (eventType === type) {
-			const oldConfig = global.GoatBot[prop];
-
-			// wait 200ms to reload config
-			setTimeout(() => {
-				try {
-					// if file change first time (when start bot, maybe you know it's called when start bot?) => not reload
-					if (isFirstModified) {
-						isFirstModified = false;
-						return;
-					}
-					// if file not change => not reload
-					if (lastModified === fs.statSync(dir).mtimeMs) {
-						return;
-					}
-					global.GoatBot[prop] = JSON.parse(fs.readFileSync(dir, 'utf-8'));
-					log.success(logName, `Reloaded ${dir.replace(process.cwd(), "")}`);
-				}
-				catch (err) {
-					log.warn(logName, `Can't reload ${dir.replace(process.cwd(), "")}`);
-					global.GoatBot[prop] = oldConfig;
-				}
-				finally {
-					lastModified = fs.statSync(dir).mtimeMs;
-				}
-			}, 200);
+watcher.on('change', (path) => {
+	try {
+		delete require.cache[require.resolve(path)];
+		const config = require(path);
+		if (path === dirConfig) {
+			global.GoatBot.config = config;
+			log.success("CONFIG", `Reloaded ${path.replace(process.cwd(), "")}`);
+		} else if (path === dirConfigCommands) {
+			global.GoatBot.configCommands = config;
+			log.success("CONFIG COMMANDS", `Reloaded ${path.replace(process.cwd(), "")}`);
 		}
-	});
-};
+	}
+	catch (error) {
+		log.warn("CONFIG", `Error reloading config file: ${error.message}`);
+	}
+});
 
-watchAndReloadConfig(dirConfigCommands, 'change', 'configCommands', 'CONFIG COMMANDS');
-watchAndReloadConfig(dirConfig, 'change', 'config', 'CONFIG');
+watcher.on('error', error => {
+	log.error("CONFIG", `Watcher error: ${error}`);
+});
 
-global.GoatBot.envGlobal = global.GoatBot.configCommands.envGlobal;
-global.GoatBot.envCommands = global.GoatBot.configCommands.envCommands;
-global.GoatBot.envEvents = global.GoatBot.configCommands.envEvents;
-
-// ———————————————— LOAD LANGUAGE ———————————————— //
-const getText = global.utils.getText;
-
-// ———————————————— AUTO RESTART ———————————————— //
-if (config.autoRestart) {
-	const time = config.autoRestart.time;
-	if (!isNaN(time) && time > 0) {
-		utils.log.info("AUTO RESTART", getText("Goat", "autoRestart1", utils.convertTime(time, true)));
+process.on('error', (error) => {
+	if (error.code === 'EMFILE') {
+		console.warn('Too many open files, waiting before trying again...');
 		setTimeout(() => {
-			utils.log.info("AUTO RESTART", "Restarting...");
-			process.exit(2);
-		}, time);
+			watcher.close();
+			watcher = chokidar.watch([dirConfigCommands, dirConfig], {
+				persistent: true,
+				usePolling: false,
+				ignoreInitial: true,
+				awaitWriteFinish: {
+					stabilityThreshold: 2000,
+					pollInterval: 100
+				}
+			});
+		}, 1000);
 	}
-	else if (typeof time == "string" && time.match(/^((((\d+,)+\d+|(\d+(\/|-|#)\d+)|\d+L?|\*(\/\d+)?|L(-\d+)?|\?|[A-Z]{3}(-[A-Z]{3})?) ?){5,7})$/gmi)) {
-		utils.log.info("AUTO RESTART", getText("Goat", "autoRestart2", time));
-		const cron = require("node-cron");
-		cron.schedule(time, () => {
-			utils.log.info("AUTO RESTART", "Restarting...");
-			process.exit(2);
-		});
-	}
-}
+});
 
 (async () => {
 	// ———————————————— SETUP MAIL ———————————————— //
@@ -271,7 +256,7 @@ if (config.autoRestart) {
 	global.utils.sendMail = sendMail;
 	global.utils.transporter = transporter;
 
-	// ———————————————— CHECK VERSION ———————————————— //
+	// ——————————————— — CHECK VERSION ———————————————— //
 	const { data: { version } } = await axios.get("https://raw.githubusercontent.com/ntkhang03/Goat-Bot-V2/main/package.json");
 	const currentVersion = require("./package.json").version;
 	if (compareVersion(version, currentVersion) === 1)
